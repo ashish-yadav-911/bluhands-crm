@@ -1,0 +1,41 @@
+# Control plane's OWN infra for local dev: postgres, redis, and the shared
+# Caddy reverse proxy that all tenants route through. The FastAPI app and
+# Celery worker run as host processes (see README) for fast iteration.
+name: bluhands-control-plane-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bluhands
+      POSTGRES_PASSWORD: bluhands
+      POSTGRES_DB: bluhands_control
+    ports:
+      - "5432:5432"
+    volumes:
+      - control-postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:6.2-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "2019:2019"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile
+      - ./caddy/sites-enabled:/etc/caddy/sites-enabled
+    extra_hosts:
+      # Lets Caddy reverse-proxy to tenant containers' published host ports,
+      # from inside its own container, on Windows/Mac/Linux alike.
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  control-postgres-data:

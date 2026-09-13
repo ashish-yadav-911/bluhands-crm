@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Secrets and local config
+.env
+
+# Generated tenant state
+tenants_data/*/
+!tenants_data/.gitkeep
+
+# Generated Caddy routes (written at provisioning time)
+caddy/sites-enabled/*.caddy
+!caddy/sites-enabled/.gitkeep
+
+# Local process/run scratch
+*.log
+*.pid
+token.txt
+*_id.txt
