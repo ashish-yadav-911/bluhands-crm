@@ -1,0 +1,171 @@
+# The shared ERPNext bench: ONE container set hosting MANY tenant sites,
+# resolved per-request by Host header (Frappe's DNS multitenancy).
+#
+# This is control-plane infrastructure, not a per-tenant artifact -- it is a
+# static file, not a Jinja template, and it is brought up once. A new tenant
+# is `bench new-site <slug>.<base_domain>` against the `backend` service here,
+# which costs ~1-2 minutes and a MariaDB schema rather than 9 more containers.
+#
+# Deliberately a SEPARATE compose project from docker-compose.dev.yml so the
+# bench can be restarted without bouncing the control plane's own Postgres,
+# Redis and Caddy -- and so `down -v` on one can never destroy the other.
+#
+# Isolation caveats (documented, accepted for local dev):
+#   - Shared MariaDB server. Data isolation is schema-level and real; resource
+#     isolation is nil, and max_connections becomes a cross-tenant limit.
+#   - Shared queue/scheduler. One tenant's slow background job blocks everyone.
+#   - Shared installed-app set: no per-tenant apps, no independent upgrades.
+#   - `bench set-config -g` hits every site. Per-tenant config MUST use
+#     `bench --site <site> set-config`.
+name: bluhands-shared-bench
+
+# Pinned by digest, not by the floating `version-15` tag: frappe and erpnext
+# are released as a matched pair and a drifting tag has broken the setup-wizard
+# path before (frappe/erpnext#48277). This digest is erpnext 15.120.0 /
+# frappe 15.118.0. Re-pin deliberately, never incidentally.
+x-erpnext-image: &erpnext_image frappe/erpnext@sha256:3dbb54eeb910672c145d913c543feebb5e819e0f6c2071570894a73b5984de1a
+
+x-backend-env: &backend_env
+  DB_HOST: mariadb
+  DB_PORT: "3306"
+  REDIS_CACHE: redis-cache:6379
+  REDIS_QUEUE: redis-queue:6379
+  SOCKETIO_PORT: "9000"
+
+services:
+  mariadb:
+    image: mariadb:10.6
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${SHARED_BENCH_DB_ROOT_PASSWORD:?set SHARED_BENCH_DB_ROOT_PASSWORD in .env}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+      - --skip-innodb-read-only-compressed
+      # Tuned down for a 7.7GB dev box. The default buffer pool plus the
+      # rest of the bench does not leave room for Windows and an editor.
+      - --innodb-buffer-pool-size=512M
+      # Every tenant site shares this pool, so it is a cross-tenant limit.
+      - --max-connections=100
+    volumes:
+      - mariadb-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 900m
+
+  redis-cache:
+    image: redis:6.2-alpine
+    restart: unless-stopped
+    mem_limit: 128m
+
+  redis-queue:
+    image: redis:6.2-alpine
+    restart: unless-stopped
+    volumes:
+      - redis-queue-data:/data
+    mem_limit: 128m
+
+  configurator:
+    image: *erpnext_image
+    restart: "no"
+    entrypoint: ["bash", "-c"]
+    # Frappe reads db/redis connection details from sites/common_site_config.json,
+    # not from these env vars directly -- this one-shot step is what writes them
+    # there. Runs once for the whole bench, not once per tenant.
+    command:
+      - >
+        ls -1 apps > sites/apps.txt;
+        bench set-config -g db_host $$DB_HOST;
+        bench set-config -gp db_port $$DB_PORT;
+        bench set-config -g redis_cache "redis://$$REDIS_CACHE";
+        bench set-config -g redis_queue "redis://$$REDIS_QUEUE";
+        bench set-config -g redis_socketio "redis://$$REDIS_QUEUE";
+        bench set-config -gp socketio_port $$SOCKETIO_PORT;
+    environment: *backend_env
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+    depends_on:
+      mariadb:
+        condition: service_healthy
+
+  backend: &backend_service
+    image: *erpnext_image
+    restart: unless-stopped
+    environment: *backend_env
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      configurator:
+        condition: service_completed_successfully
+    # No HTTP healthcheck: /api/method/ping 404s for an unrecognised Host, and
+    # on a fresh bench no site exists at all -- a curl healthcheck would
+    # deadlock waiting for a site that cannot exist until bench new-site runs.
+    mem_limit: 900m
+
+  websocket:
+    <<: *backend_service
+    command: ["node", "/home/frappe/frappe-bench/apps/frappe/socketio.js"]
+    healthcheck:
+      disable: true
+    mem_limit: 256m
+
+  # One worker for all queues instead of the reference topology's separate
+  # short/long workers: saves ~350MB, and at this scale there is no queue
+  # contention worth isolating. Split them again if long jobs ever starve
+  # short ones.
+  queue:
+    <<: *backend_service
+    command: ["bench", "worker", "--queue", "short,default,long"]
+    healthcheck:
+      disable: true
+    mem_limit: 700m
+
+  scheduler:
+    <<: *backend_service
+    command: ["bench", "schedule"]
+    healthcheck:
+      disable: true
+    mem_limit: 400m
+
+  frontend:
+    image: *erpnext_image
+    command: ["nginx-entrypoint.sh"]
+    restart: unless-stopped
+    environment:
+      BACKEND: backend:8000
+      SOCKETIO: websocket:9000
+      # THE multi-tenancy switch. The doubled `$$` escapes Compose
+      # interpolation so nginx's envsubst receives the literal `$host`,
+      # making nginx resolve the Frappe site from the request's Host header
+      # instead of serving one hardcoded site. Everything else in this file
+      # is ordinary ERPNext; this line is what makes it multi-tenant.
+      FRAPPE_SITE_NAME_HEADER: $$host
+      UPSTREAM_REAL_IP_ADDRESS: "127.0.0.1"
+      UPSTREAM_REAL_IP_HEADER: "X-Forwarded-For"
+      UPSTREAM_REAL_IP_RECURSIVE: "off"
+      PROXY_READ_TIMEOUT: "120"
+      CLIENT_MAX_BODY_SIZE: "50m"
+    volumes:
+      - sites:/usr/share/nginx/html/sites:ro
+      - logs:/var/log/nginx
+    ports:
+      # One port for every tenant. Sites are distinguished by Host header,
+      # so there is no per-tenant port allocation in this hosting mode.
+      - "${SHARED_BENCH_HTTP_PORT:-8080}:8080"
+    depends_on:
+      - backend
+      - websocket
+    mem_limit: 128m
+
+volumes:
+  mariadb-data:
+  redis-queue-data:
+  sites:
+  logs:

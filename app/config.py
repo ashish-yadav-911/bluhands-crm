@@ -18,6 +18,20 @@ class Settings(BaseSettings):
     caddy_sites_dir: str = "./caddy/sites-enabled"
     caddy_admin_api: str = "http://localhost:2019"
 
+    # --- Shared ERPNext bench -------------------------------------------
+    # One bench hosting many tenant sites, resolved per-request by Host
+    # header. Replaces the per-tenant compose stack: there is no per-tenant
+    # port in this mode, so `tenant_port_range_*` and `allocate_http_port`
+    # above are dormant, kept only for a future hosting_mode="dedicated".
+    shared_bench_project: str = "bluhands-shared-bench"
+    shared_bench_compose: str = "docker/shared-bench-compose.yml"
+    shared_bench_backend_service: str = "backend"
+    shared_bench_http_port: int = 8080
+    shared_bench_db_root_password: str = ""
+    # bench new-site can take a long time on a small box -- measured, not
+    # assumed; see the provisioning task for how the budget is spent.
+    site_create_timeout_seconds: int = 2400
+
     custom_app_name: str = "bluhands_custom"
     agent_runner: str = "stub"
 
