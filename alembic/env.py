@@ -8,7 +8,15 @@ from app.db.base import Base
 from app.models import *  # noqa: F401,F403 - ensures all models are registered on Base.metadata
 
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.database_url)
+
+# Default to the app's configured database, but let an explicitly supplied
+# url win. alembic.ini ships with an empty sqlalchemy.url, so in normal use
+# this is still settings.database_url -- the difference is that a caller
+# driving alembic programmatically (the migration tests, or a one-off
+# migration against a scratch database) can now target something else
+# instead of being silently redirected at the real Postgres.
+if not config.get_main_option("sqlalchemy.url", None):
+    config.set_main_option("sqlalchemy.url", settings.database_url)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

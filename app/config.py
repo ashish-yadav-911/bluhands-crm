@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     shared_bench_backend_service: str = "backend"
     shared_bench_http_port: int = 8080
     shared_bench_db_root_password: str = ""
+    # Encrypts tenant credentials at rest. See app/services/crypto.py for why
+    # they are now stored at all, and why keeping this in .env is a local-dev
+    # compromise rather than the intended end state.
+    credential_encryption_key: str = ""
     # bench new-site can take a long time on a small box -- measured, not
     # assumed; see the provisioning task for how the budget is spent.
     site_create_timeout_seconds: int = 2400

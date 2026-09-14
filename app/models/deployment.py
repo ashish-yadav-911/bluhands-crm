@@ -23,6 +23,11 @@ class Deployment(Base):
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="pending")
     status_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    bench_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("benches.id"), nullable=True)
+
+    # Both unwritten in shared-bench mode -- every site shares one frontend
+    # port and one compose project, so there is nothing per-tenant to record.
+    # Kept because they are exactly what hosting_mode="dedicated" needs.
     compose_project_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     http_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
     site_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
