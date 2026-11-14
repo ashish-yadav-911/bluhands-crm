@@ -32,9 +32,21 @@ class Settings(BaseSettings):
     # they are now stored at all, and why keeping this in .env is a local-dev
     # compromise rather than the intended end state.
     credential_encryption_key: str = ""
+
+    # Seed values for the ERPNext setup wizard. Completing the wizard is not
+    # optional -- an incomplete site shows a blocking onboarding screen -- and
+    # it creates the Company that dozens of standard doctypes require.
+    default_country: str = "India"
+    default_currency: str = "INR"
+    default_timezone: str = "Asia/Kolkata"
+    default_language: str = "English"
+    default_chart_of_accounts: str = "Standard"
     # bench new-site can take a long time on a small box -- measured, not
     # assumed; see the provisioning task for how the budget is spent.
     site_create_timeout_seconds: int = 2400
+    # How long a queued tenant waits for the site-creation lock. Long enough
+    # to sit behind a few builds, short enough to fail visibly, not hang.
+    site_create_lock_wait_seconds: int = 3600
 
     custom_app_name: str = "bluhands_custom"
     agent_runner: str = "stub"

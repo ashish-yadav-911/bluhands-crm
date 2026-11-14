@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.models.application import Application
 from app.models.deployment import Deployment
 from app.models.tenant import Tenant
-from app.services.org_service import slugify
+from app.services.bench_service import get_default_bench
 from app.services.provisioning.naming import generate_secret, generate_tenant_slug
 
 
@@ -24,6 +24,7 @@ def create_tenant_and_deployment(
     if application is None:
         raise ValueError(f"Unknown or inactive application key: {application_key}")
 
+    bench = get_default_bench(db)
     tenant_slug = generate_tenant_slug(db, org_slug, name)
 
     tenant = Tenant(
@@ -31,6 +32,13 @@ def create_tenant_and_deployment(
         application_id=application.id,
         name=name,
         slug=tenant_slug,
+        # Fixed at creation and never recomputed. The site name is the
+        # site's identity on disk and in MariaDB and there is no
+        # `bench rename-site`, so deriving it later from a possibly-changed
+        # base_domain would point at a site that does not exist.
+        site_name=f"{tenant_slug}.{bench.base_domain}",
+        bench_id=bench.id,
+        hosting_mode="shared_bench",
     )
     db.add(tenant)
     db.flush()
@@ -39,6 +47,7 @@ def create_tenant_and_deployment(
 
     deployment = Deployment(
         tenant_id=tenant.id,
+        bench_id=bench.id,
         status="pending",
     )
     db.add(deployment)

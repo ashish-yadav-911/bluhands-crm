@@ -1,3 +1,15 @@
+"""DORMANT -- hosting_mode="dedicated" only.
+
+Superseded for shared-bench tenants by app/services/frappe/bench_client.py
+and app/services/provisioning/site_setup.py, which run bench against the
+shared backend container and scope every command with --site.
+
+Kept, not deleted: a tenant needing real server-side code has to move to
+its own stack (installing a custom app on a shared bench would load that
+tenant's Python into workers serving everyone), and this is the path that
+provisions one.
+"""
+
 from pathlib import Path
 
 from app.services.provisioning.docker_runner import DockerCommandError, compose_exec

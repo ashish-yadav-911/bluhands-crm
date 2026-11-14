@@ -14,7 +14,7 @@ def test_render_compose_file_writes_compose_and_env(tmp_path, monkeypatch):
         admin_password="admin-secret",
     )
 
-    compose_path = render_compose_file("tenant-compose.yml.j2", ctx)
+    compose_path = render_compose_file("dedicated-tenant-compose.yml.j2", ctx)
 
     assert compose_path.exists()
     content = compose_path.read_text(encoding="utf-8")

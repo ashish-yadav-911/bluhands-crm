@@ -11,6 +11,9 @@ celery_app = Celery(
 
 celery_app.conf.update(
     task_track_started=True,
+    # Provisioning tasks run for minutes; without this a worker reserves a
+    # queued task it cannot start, blocking one that another worker could.
+    worker_prefetch_multiplier=1,
     task_serializer="json",
     result_serializer="json",
     accept_content=["json"],

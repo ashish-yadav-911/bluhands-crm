@@ -32,6 +32,9 @@ services:
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile
       - ./caddy/sites-enabled:/etc/caddy/sites-enabled
+    environment:
+      BASE_DOMAIN: ${BASE_DOMAIN:-tenants.localhost}
+      SHARED_BENCH_HTTP_PORT: ${SHARED_BENCH_HTTP_PORT:-8080}
     extra_hosts:
       # Lets Caddy reverse-proxy to tenant containers' published host ports,
       # from inside its own container, on Windows/Mac/Linux alike.

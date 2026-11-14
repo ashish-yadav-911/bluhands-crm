@@ -1,3 +1,9 @@
+"""DORMANT -- hosting_mode="dedicated" only.
+
+Shared-bench tenants are routed by the single wildcard block in
+caddy/Caddyfile, so provisioning no longer registers a per-tenant route.
+"""
+
 from pathlib import Path
 
 import httpx

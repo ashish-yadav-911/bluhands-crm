@@ -1,0 +1,104 @@
+{
+  "meta": {
+    "name": "Sparkle HVAC Services",
+    "description": "Schedules technician visits to customer sites and tracks maintenance contracts."
+  },
+  "roles": [{ "name": "Service Manager" }],
+  "doctypes": [
+    {
+      "name": "Service Visit",
+      "description": "One technician visit to a customer site.",
+      "naming": "series",
+      "series_prefix": "SV",
+      "fields": [
+        { "label": "Customer", "fieldtype": "Link", "options": "Customer", "reqd": true },
+        { "label": "Technician", "fieldtype": "Link", "options": "User" },
+        { "label": "Visit Date", "fieldtype": "Date", "reqd": true },
+        {
+          "label": "Status",
+          "fieldtype": "Select",
+          "options": "Scheduled\nIn Progress\nCompleted",
+          "default": "Scheduled"
+        },
+        { "label": "Notes", "fieldtype": "Text" },
+        { "label": "Parts Used", "fieldtype": "Table", "options": "Visit Part" }
+      ],
+      "permissions": [
+        { "role": "Service Manager", "read": true, "write": true, "create": true, "delete": true },
+        { "role": "Technician", "read": true, "write": true, "create": false }
+      ]
+    },
+    {
+      "name": "Visit Part",
+      "is_child_table": true,
+      "naming": "random",
+      "fields": [
+        { "label": "Item", "fieldtype": "Link", "options": "Item", "reqd": true, "in_list_view": true },
+        { "label": "Quantity", "fieldtype": "Float", "reqd": true, "in_list_view": true }
+      ]
+    },
+    {
+      "name": "Maintenance Contract",
+      "naming": "series",
+      "fields": [
+        { "label": "Customer", "fieldtype": "Link", "options": "Customer", "reqd": true },
+        { "label": "Start Date", "fieldtype": "Date", "reqd": true },
+        { "label": "End Date", "fieldtype": "Date" },
+        { "label": "Annual Fee", "fieldtype": "Currency" }
+      ]
+    }
+  ],
+  "standard_doctype_mods": {
+    "custom_fields": [
+      { "doctype": "Customer", "field": { "label": "Preferred Contact Time", "fieldtype": "Data" } },
+      { "doctype": "Customer", "field": { "label": "Gate Code", "fieldtype": "Data" } }
+    ],
+    "property_setters": [
+      { "doctype": "Customer", "fieldname": "customer_group", "property": "in_list_view", "value": "1" }
+    ]
+  },
+  "workflows": [
+    {
+      "name": "Service Visit Flow",
+      "doctype": "Service Visit",
+      "states": [{ "name": "Scheduled", "allow_edit_role": "Service Manager" }],
+      "transitions": [
+        { "from_state": "Scheduled", "action": "Start Work", "to_state": "In Progress", "allowed_role": "Technician" },
+        { "from_state": "In Progress", "action": "Complete", "to_state": "Completed", "allowed_role": "Technician" }
+      ]
+    }
+  ],
+  "workspaces": [
+    {
+      "title": "Field Service",
+      "shortcuts": [
+        { "label": "Service Visits", "doctype": "Service Visit" },
+        { "label": "Maintenance Contracts", "doctype": "Maintenance Contract" }
+      ],
+      "number_cards": [
+        { "label": "Scheduled Visits", "doctype": "Service Visit", "filters": { "status": "Scheduled" } }
+      ]
+    }
+  ],
+  "notifications": [
+    {
+      "name": "Visit Completed",
+      "doctype": "Service Visit",
+      "event": "Value Change",
+      "value_changed": "status",
+      "subject": "Visit {{ doc.name }} status changed",
+      "message": "Visit {{ doc.name }} is now {{ doc.status }}.",
+      "recipient_roles": ["Service Manager"]
+    }
+  ],
+  "seed_data": [
+    { "doctype": "UOM", "values": { "uom_name": "Visit Hour" }, "match_on": ["uom_name"] }
+  ],
+  "unsupported_requests": [
+    {
+      "request": "Text the customer when the technician is on the way",
+      "reason": "Needs an SMS gateway integration, which is server-side code.",
+      "kind": "tier2"
+    }
+  ]
+}

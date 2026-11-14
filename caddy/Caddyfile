@@ -1,5 +1,20 @@
 {
 	admin 0.0.0.0:2019
+	# Explicit http:// below already opts these out of TLS, but *.localhost
+	# can never get a public certificate, so make it a global decision
+	# rather than something one missed scheme could undo.
+	auto_https off
 }
 
+# Shared bench: every tenant site is <slug>.<BASE_DOMAIN> and is served by the
+# same container set, which picks the site from the Host header. Caddy's
+# reverse_proxy passes the inbound Host upstream unchanged, which is exactly
+# what the bench's nginx needs -- so there is one block here, not one per
+# tenant, and provisioning no longer touches Caddy at all.
+http://*.{$BASE_DOMAIN:tenants.localhost} {
+	reverse_proxy host.docker.internal:{$SHARED_BENCH_HTTP_PORT:8080}
+}
+
+# Dormant: per-tenant routes written by proxy_registrar for
+# hosting_mode="dedicated". Harmless when the directory is empty.
 import sites-enabled/*.caddy

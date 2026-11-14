@@ -1,3 +1,9 @@
+"""DORMANT -- hosting_mode="dedicated" only.
+
+Shared-bench tenants are sites on an already-running bench, so there is
+no per-tenant compose file to render. Kept for the dedicated path.
+"""
+
 from dataclasses import dataclass
 from pathlib import Path
 

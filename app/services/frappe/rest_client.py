@@ -150,8 +150,11 @@ class FrappeClient:
         filters: list | None = None,
         fields: list[str] | None = None,
         limit: int = 20,
+        order_by: str | None = None,
     ) -> list[dict]:
         params: dict[str, Any] = {"limit_page_length": limit}
+        if order_by is not None:
+            params["order_by"] = order_by
         if filters is not None:
             params["filters"] = json.dumps(filters)
         if fields is not None:

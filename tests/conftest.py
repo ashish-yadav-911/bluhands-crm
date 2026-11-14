@@ -8,11 +8,23 @@ from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
 from app.models.application import Application
+from app.models.bench import Bench
 
 # Registers every model on Base.metadata. Imported as `from app import models`
 # rather than `import app.models`, which would rebind the name `app` to the
 # package and shadow the FastAPI instance imported above.
 from app import models  # noqa: F401
+
+
+@pytest.fixture(autouse=True)
+def _credential_encryption_key(monkeypatch):
+    """A fixed test key, so the suite does not depend on -- or leak -- the
+    developer's real CREDENTIAL_ENCRYPTION_KEY from .env."""
+    from cryptography.fernet import Fernet
+
+    monkeypatch.setattr(
+        "app.services.crypto.settings.credential_encryption_key", Fernet.generate_key().decode()
+    )
 
 
 @pytest.fixture()
@@ -61,8 +73,22 @@ def client(monkeypatch):
         Application(
             key="erpnext",
             display_name="ERPNext",
-            compose_template_path="tenant-compose.yml.j2",
+            compose_template_path="dedicated-tenant-compose.yml.j2",
             default_version="version-15",
+        )
+    )
+    # Tenant creation resolves the default bench to compute the site name.
+    seed_db.add(
+        Bench(
+            key="default",
+            compose_project_name="bluhands-shared-bench",
+            compose_file_path="docker/shared-bench-compose.yml",
+            backend_service="backend",
+            frontend_http_port=8080,
+            base_domain="tenants.localhost",
+            image_version="test",
+            status="ready",
+            is_default=True,
         )
     )
     seed_db.commit()
